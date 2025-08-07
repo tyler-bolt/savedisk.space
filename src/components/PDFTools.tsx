@@ -82,6 +82,9 @@ const PDFTools: React.FC = () => {
   const handlePDFCompression = async () => {
     if (!uploadedPDF) return;
 
+    // Initialize originalSize at the beginning
+    const originalSize = uploadedPDF.file.size;
+
     setIsProcessing(true);
     setProcessingType('compress');
     setProgress(0);
@@ -259,7 +262,6 @@ const PDFTools: React.FC = () => {
       console.log(`📏 Compressed size: ${compressedPdfBytes.length} bytes (${(compressedPdfBytes.length / 1024).toFixed(2)} KB)`);
       
       // Calculate compression statistics
-      const originalSize = uploadedPDF.file.size;
       const compressedSize = compressedPdfBytes.length;
       const savedBytes = originalSize - compressedSize;
       const compressionRatio = originalSize / compressedSize;
