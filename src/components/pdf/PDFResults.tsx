@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Download } from 'lucide-react';
 
@@ -30,6 +31,19 @@ const PDFResults: React.FC<PDFResultsProps> = ({
   onDownload,
   formatFileSize
 }) => {
+  const downloadButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (processedFile && !isProcessing && downloadButtonRef.current) {
+      // Scroll to the download button and focus it
+      downloadButtonRef.current.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+      downloadButtonRef.current.focus();
+    }
+  }, [processedFile, isProcessing]);
+
   if (!processedFile || isProcessing) return null;
 
   return (
@@ -62,6 +76,7 @@ const PDFResults: React.FC<PDFResultsProps> = ({
       </div>
 
       <motion.button
+        ref={downloadButtonRef}
         onClick={onDownload}
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
