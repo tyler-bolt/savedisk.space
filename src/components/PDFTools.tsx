@@ -235,7 +235,7 @@ const PDFTools: React.FC = () => {
               <FileUpload
                 onFileUpload={handleFileUpload}
                 acceptedTypes={['application/pdf']}
-                maxSize={100 * 1024 * 1024} // 100MB
+                maxSize={50 * 1024 * 1024} // 50MB
               />
             ) : (
               <div className="bg-black/20 rounded-xl p-4">

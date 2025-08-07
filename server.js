@@ -340,6 +340,8 @@ app.post('/api/pdf-compress', (req, res) => {
         message: err.message || 'Failed to upload PDF file'
       });
     }
+  }
+  )
 
   try {
     const { file } = req;
@@ -505,7 +507,6 @@ app.post('/api/pdf-compress', (req, res) => {
       message: 'An unexpected error occurred while processing your PDF. Please try again.'
     });
   }
-  });
 });
 
 // Serve uploaded images for preview
