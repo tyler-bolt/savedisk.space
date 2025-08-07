@@ -128,6 +128,84 @@ const PDFTools: React.FC = () => {
       console.log(`   Creator: ${creator || 'Not set'}`);
       console.log(`   Producer: ${producer || 'Not set'}`);
       
+      // Enhanced content analysis
+      console.log('🔍 Enhanced Content Analysis:');
+      
+      // Analyze PDF catalog and resources
+      const catalog = pdfDoc.catalog;
+      const context = pdfDoc.context;
+      
+      // Count different types of objects
+      let imageCount = 0;
+      let fontCount = 0;
+      let streamCount = 0;
+      let totalStreamSize = 0;
+      
+      // Iterate through all PDF objects to analyze content
+      const objectMap = context.indirectObjectMap;
+      console.log(`   Total PDF objects: ${objectMap.size}`);
+      
+      objectMap.forEach((obj, ref) => {
+        try {
+          if (obj && typeof obj === 'object') {
+            // Check for image objects (XObject with Subtype Image)
+            if (obj.dict && obj.dict.get && obj.dict.get('Type')?.toString() === 'XObject' && 
+                obj.dict.get('Subtype')?.toString() === 'Image') {
+              imageCount++;
+              const width = obj.dict.get('Width');
+              const height = obj.dict.get('Height');
+              const bitsPerComponent = obj.dict.get('BitsPerComponent') || 8;
+              if (width && height) {
+                console.log(`     Image ${imageCount}: ${width}x${height}px, ${bitsPerComponent} bits/component`);
+              }
+            }
+            
+            // Check for font objects
+            if (obj.dict && obj.dict.get && obj.dict.get('Type')?.toString() === 'Font') {
+              fontCount++;
+              const fontName = obj.dict.get('BaseFont')?.toString() || 'Unknown';
+              const fontSubtype = obj.dict.get('Subtype')?.toString() || 'Unknown';
+              console.log(`     Font ${fontCount}: ${fontName} (${fontSubtype})`);
+            }
+            
+            // Count streams and their sizes
+            if (obj.contents && obj.contents.length) {
+              streamCount++;
+              totalStreamSize += obj.contents.length;
+            }
+          }
+        } catch (e) {
+          // Skip objects that can't be analyzed
+        }
+      });
+      
+      console.log(`   Images found: ${imageCount}`);
+      console.log(`   Fonts found: ${fontCount}`);
+      console.log(`   Streams found: ${streamCount}`);
+      console.log(`   Total stream data: ${(totalStreamSize / 1024).toFixed(2)} KB`);
+      console.log(`   Stream data percentage: ${((totalStreamSize / originalSize) * 100).toFixed(1)}%`);
+      
+      // Analyze if this PDF was already optimized
+      const isAlreadyOptimized = (creator && creator.includes('pdf-lib')) || 
+                                (producer && producer.includes('pdf-lib'));
+      console.log(`   Already pdf-lib optimized: ${isAlreadyOptimized ? 'YES' : 'NO'}`);
+      
+      if (isAlreadyOptimized) {
+        console.log('   ⚠️ This PDF was already processed by pdf-lib - minimal gains expected');
+      }
+      
+      // Estimate content type
+      const avgSizePerPage = originalSize / pageCount;
+      console.log(`   Average size per page: ${(avgSizePerPage / 1024).toFixed(2)} KB`);
+      
+      if (avgSizePerPage > 200 * 1024) { // > 200KB per page
+        console.log('   📸 Likely image-heavy content (>200KB/page)');
+      } else if (avgSizePerPage > 50 * 1024) { // > 50KB per page
+        console.log('   📄 Mixed content (50-200KB/page)');
+      } else {
+        console.log('   📝 Likely text-heavy content (<50KB/page)');
+      }
+      
       // Analyze PDF structure
       console.log('🔍 Analyzing PDF structure...');
       const pages = pdfDoc.getPages();
