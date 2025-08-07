@@ -10,6 +10,7 @@ interface FileInfo {
   format: string;
   dimensions?: { width: number; height: number };
   url: string;
+  file: File;
 }
 
 const ImageTools: React.FC = () => {
@@ -31,7 +32,8 @@ const ImageTools: React.FC = () => {
         size: file.size,
         format: file.type,
         dimensions: { width: img.width, height: img.height },
-        url: url
+        url: url,
+        file: file
       });
     };
     img.src = url;
@@ -51,39 +53,141 @@ const ImageTools: React.FC = () => {
     setIsProcessing(true);
     setProgress(0);
 
-    // Simulate compression progress
+    // Progress animation
     const progressInterval = setInterval(() => {
       setProgress(prev => {
         if (prev >= 90) {
           clearInterval(progressInterval);
           return 90;
         }
-        return prev + 10;
+        return prev + 15;
       });
-    }, 200);
+    }, 150);
 
-    // Simulate compression (in real app, this would be backend processing)
-    setTimeout(() => {
-      const compressionRates = { low: 0.85, medium: 0.65, high: 0.45 };
-      const rate = compressionRates[compressionLevel];
-      const newSize = Math.floor(uploadedFile.size * rate);
-      const savings = Math.floor((1 - rate) * 100);
-
-      setCompressedFile({
-        ...uploadedFile,
-        size: newSize,
-        name: uploadedFile.name.replace(/\.[^/.]+$/, '_compressed.webp')
-      });
-      setCompressionSavings(savings);
-      setProgress(100);
+    try {
+      // Create image element to load the file
+      const img = new window.Image();
+      
+      img.onload = () => {
+        try {
+          // Create canvas for image processing
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            throw new Error('Could not get canvas context');
+          }
+          
+          // Set canvas dimensions (with optional resizing for large images)
+          const maxDimension = 4000; // Maximum width or height
+          let { width, height } = img;
+          
+          // Resize if image is too large
+          if (width > maxDimension || height > maxDimension) {
+            const ratio = Math.min(maxDimension / width, maxDimension / height);
+            width = Math.floor(width * ratio);
+            height = Math.floor(height * ratio);
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Draw image onto canvas
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Get quality settings based on compression level
+          const qualityMap = {
+            low: 0.9,    // 90% quality
+            medium: 0.75, // 75% quality  
+            high: 0.6     // 60% quality
+          };
+          const quality = qualityMap[compressionLevel];
+          
+          // Determine output format and MIME type
+          let outputMimeType = 'image/jpeg'; // Default to JPEG for best compression
+          let outputExtension = 'jpg';
+          
+          // Keep PNG as PNG if it has transparency, otherwise convert to JPEG
+          if (uploadedFile.format === 'image/png') {
+            // Check if PNG has transparency
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            let hasTransparency = false;
+            
+            for (let i = 3; i < data.length; i += 4) {
+              if (data[i] < 255) {
+                hasTransparency = true;
+                break;
+              }
+            }
+            
+            if (hasTransparency) {
+              outputMimeType = 'image/png';
+              outputExtension = 'png';
+            }
+          } else if (uploadedFile.format === 'image/webp') {
+            outputMimeType = 'image/webp';
+            outputExtension = 'webp';
+          }
+          
+          // Convert canvas to blob with compression
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              throw new Error('Failed to create compressed image blob');
+            }
+            
+            const compressedSize = blob.size;
+            const originalSize = uploadedFile.size;
+            const savings = Math.max(0, Math.floor(((originalSize - compressedSize) / originalSize) * 100));
+            
+            // Create URL for the compressed image
+            const compressedUrl = URL.createObjectURL(blob);
+            
+            // Generate new filename
+            const baseName = uploadedFile.name.replace(/\.[^/.]+$/, '');
+            const newName = `${baseName}_compressed.${outputExtension}`;
+            
+            setCompressedFile({
+              name: newName,
+              size: compressedSize,
+              url: compressedUrl,
+              file: uploadedFile.file
+            });
+            
+            setCompressionSavings(savings);
+            clearInterval(progressInterval);
+            setProgress(100);
+            setIsProcessing(false);
+            
+          }, outputMimeType, outputMimeType === 'image/png' ? undefined : quality);
+          
+        } catch (error) {
+          console.error('Canvas processing error:', error);
+          clearInterval(progressInterval);
+          setIsProcessing(false);
+        }
+      };
+      
+      img.onerror = () => {
+        console.error('Failed to load image for compression');
+        clearInterval(progressInterval);
+        setIsProcessing(false);
+      };
+      
+      // Load the image
+      img.src = uploadedFile.url;
+      
+    } catch (error) {
+      console.error('Image compression error:', error);
+      clearInterval(progressInterval);
       setIsProcessing(false);
-    }, 2000);
+    }
   };
 
   const downloadCompressed = () => {
     if (!compressedFile) return;
     
-    // In a real app, this would download the actual compressed file
+    // Download the actual compressed file
     const link = document.createElement('a');
     link.href = compressedFile.url;
     link.download = compressedFile.name;
