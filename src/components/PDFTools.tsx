@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { PDFDocument } from 'pdf-lib';
 
 // Import the refactored components
 import PDFUploadSection from './pdf/PDFUploadSection';
@@ -13,6 +14,7 @@ interface PDFFile {
   size: number;
   pageCount: number;
   url: string;
+  file: File;
 }
 
 type ProcessingType = 'compress' | 'word' | 'powerpoint' | 'jpeg' | null;
@@ -41,7 +43,8 @@ const PDFTools: React.FC = () => {
       name: file.name,
       size: file.size,
       pageCount: Math.max(1, estimatedPages),
-      url: url
+      url: url,
+      file: file
     });
   };
 
@@ -76,7 +79,7 @@ const PDFTools: React.FC = () => {
   /**
    * PDF compression - now works entirely client-side for deployment compatibility
    */
-  const handlePDFCompression = () => {
+  const handlePDFCompression = async () => {
     if (!uploadedPDF) return;
 
     setIsProcessing(true);
@@ -94,22 +97,40 @@ const PDFTools: React.FC = () => {
       });
     }, 300);
 
-    // Simulate compression with realistic results
-    setTimeout(() => {
-      const compressionRates = { low: 0.85, medium: 0.65, high: 0.45 };
-      const rate = compressionRates.medium; // Default to medium compression
-      const newSize = Math.floor(uploadedPDF.size * rate);
+    try {
+      // Read the file as ArrayBuffer
+      const arrayBuffer = await uploadedPDF.file.arrayBuffer();
+      
+      // Load the PDF document
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      
+      // Save with compression options
+      const compressedPdfBytes = await pdfDoc.save({
+        useObjectStreams: true,
+        addDefaultPage: false,
+        objectsPerTick: 50,
+        updateFieldAppearances: false
+      });
+      
+      // Create a blob from the compressed bytes
+      const compressedBlob = new Blob([compressedPdfBytes], { type: 'application/pdf' });
+      const compressedUrl = URL.createObjectURL(compressedBlob);
       
       setProcessedFile({
         name: uploadedPDF.name.replace('.pdf', '_compressed.pdf'),
-        size: newSize,
-        url: uploadedPDF.url // Use original URL for demo
+        size: compressedBlob.size,
+        url: compressedUrl
       });
       
       clearInterval(progressInterval);
       setProgress(100);
       setIsProcessing(false);
-    }, 3000);
+    } catch (error) {
+      console.error('PDF compression error:', error);
+      clearInterval(progressInterval);
+      setIsProcessing(false);
+      // You could add error state handling here if needed
+    }
   };
 
   /**
