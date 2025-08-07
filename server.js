@@ -27,7 +27,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Enable CORS for frontend communication
 app.use(cors({
-  origin: 'http://localhost:5173', // Vite dev server
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173', // Vite dev server
   credentials: true
 }));
 
