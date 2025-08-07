@@ -108,6 +108,7 @@ const PDFTools: React.FC = () => {
       const compressedPdfBytes = await pdfDoc.save({
         useObjectStreams: true,
         addDefaultPage: false,
+        subset: true,
         objectsPerTick: 50,
         updateFieldAppearances: false,
         compress: true
