@@ -34,18 +34,34 @@ const PDFTools: React.FC = () => {
   /**
    * Handles file upload and creates a PDF file object with metadata
    */
-  const handleFileUpload = (file: File) => {
+  const handleFileUpload = async (file: File) => {
     const url = URL.createObjectURL(file);
-    // Simulate getting PDF info (in real app, this would be backend processing)
-    const estimatedPages = Math.floor(file.size / 50000); // Rough estimate
     
-    setUploadedPDF({
-      name: file.name,
-      size: file.size,
-      pageCount: Math.max(1, estimatedPages),
-      url: url,
-      file: file
-    });
+    try {
+      // Read the PDF to get actual page count
+      const arrayBuffer = await file.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const actualPageCount = pdfDoc.getPageCount();
+      
+      setUploadedPDF({
+        name: file.name,
+        size: file.size,
+        pageCount: actualPageCount,
+        url: url,
+        file: file
+      });
+    } catch (error) {
+      console.error('Error reading PDF:', error);
+      // Fallback to estimated page count if PDF can't be read
+      const estimatedPages = Math.floor(file.size / 50000);
+      setUploadedPDF({
+        name: file.name,
+        size: file.size,
+        pageCount: Math.max(1, estimatedPages),
+        url: url,
+        file: file
+      });
+    }
   };
 
   /**
