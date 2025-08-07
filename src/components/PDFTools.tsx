@@ -44,53 +44,114 @@ const PDFTools: React.FC = () => {
   const processPDF = (type: ProcessingType) => {
     if (!uploadedPDF || !type) return;
 
+    // Only handle compression for now, other conversions are simulated
+    if (type !== 'compress') {
+      // Keep existing simulation for non-compression tools
+      setIsProcessing(true);
+      setProcessingType(type);
+      setProgress(0);
+
+      const progressInterval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 15;
+        });
+      }, 300);
+
+      setTimeout(() => {
+        let newName = '';
+        let newSize = uploadedPDF.size;
+
+        switch (type) {
+          case 'word':
+            newName = uploadedPDF.name.replace('.pdf', '.docx');
+            newSize = Math.floor(uploadedPDF.size * 0.8);
+            break;
+          case 'powerpoint':
+            newName = uploadedPDF.name.replace('.pdf', '.pptx');
+            newSize = Math.floor(uploadedPDF.size * 1.2);
+            break;
+          case 'jpeg':
+            newName = uploadedPDF.name.replace('.pdf', '_pages.zip');
+            newSize = Math.floor(uploadedPDF.size * 0.6);
+            break;
+        }
+
+        setProcessedFile({
+          name: newName,
+          size: newSize,
+          url: uploadedPDF.url
+        });
+        setProgress(100);
+        setIsProcessing(false);
+      }, 3000);
+      return;
+    }
+
+    // Real PDF compression using backend API
     setIsProcessing(true);
     setProcessingType(type);
     setProgress(0);
 
-    // Simulate processing progress
+    // Start progress animation
     const progressInterval = setInterval(() => {
       setProgress(prev => {
         if (prev >= 90) {
           clearInterval(progressInterval);
           return 90;
         }
-        return prev + 15;
+        return prev + 10;
       });
-    }, 300);
+    }, 200);
 
-    // Simulate processing completion
-    setTimeout(() => {
-      let newName = '';
-      let newSize = uploadedPDF.size;
+    // Call real PDF compression API
+    const compressPDF = async () => {
+      try {
+        // Convert data URL back to File object for upload
+        const response = await fetch(uploadedPDF.url);
+        const blob = await response.blob();
+        const file = new File([blob], uploadedPDF.name, { type: 'application/pdf' });
 
-      switch (type) {
-        case 'compress':
-          newName = uploadedPDF.name.replace('.pdf', '_compressed.pdf');
-          newSize = Math.floor(uploadedPDF.size * 0.4); // 60% compression
-          break;
-        case 'word':
-          newName = uploadedPDF.name.replace('.pdf', '.docx');
-          newSize = Math.floor(uploadedPDF.size * 0.8);
-          break;
-        case 'powerpoint':
-          newName = uploadedPDF.name.replace('.pdf', '.pptx');
-          newSize = Math.floor(uploadedPDF.size * 1.2);
-          break;
-        case 'jpeg':
-          newName = uploadedPDF.name.replace('.pdf', '_pages.zip');
-          newSize = Math.floor(uploadedPDF.size * 0.6);
-          break;
+        const formData = new FormData();
+        formData.append('pdf', file);
+
+        const compressionLevel = 'medium'; // You can make this configurable
+        const apiResponse = await fetch(`http://localhost:3001/api/pdf-compress?level=${compressionLevel}`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!apiResponse.ok) {
+          const errorData = await apiResponse.json();
+          throw new Error(errorData.message || 'PDF compression failed');
+        }
+
+        const data = await apiResponse.json();
+        
+        // Update with real compression results
+        setProcessedFile({
+          name: data.metadata.processedFilename,
+          size: data.stats.compressedSize,
+          url: `http://localhost:3001${data.previewUrl}`
+        });
+        
+        clearInterval(progressInterval);
+        setProgress(100);
+        setIsProcessing(false);
+        
+      } catch (error) {
+        console.error('PDF compression error:', error);
+        clearInterval(progressInterval);
+        setIsProcessing(false);
+        // You might want to show an error message to the user here
+        alert(`Compression failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
+    };
 
-      setProcessedFile({
-        name: newName,
-        size: newSize,
-        url: uploadedPDF.url
-      });
-      setProgress(100);
-      setIsProcessing(false);
-    }, 3000);
+    compressPDF();
   };
 
   const downloadProcessed = () => {
