@@ -143,41 +143,45 @@ const PDFTools: React.FC = () => {
       
       // Iterate through all PDF objects to analyze content
       const objectMap = context.indirectObjectMap;
-      console.log(`   Total PDF objects: ${objectMap.size}`);
+      console.log(`   Total PDF objects: ${objectMap ? objectMap.size || 0 : 0}`);
       
-      objectMap.forEach((obj, ref) => {
-        try {
-          if (obj && typeof obj === 'object') {
-            // Check for image objects (XObject with Subtype Image)
-            if (obj.dict && obj.dict.get && obj.dict.get('Type')?.toString() === 'XObject' && 
-                obj.dict.get('Subtype')?.toString() === 'Image') {
-              imageCount++;
-              const width = obj.dict.get('Width');
-              const height = obj.dict.get('Height');
-              const bitsPerComponent = obj.dict.get('BitsPerComponent') || 8;
-              if (width && height) {
-                console.log(`     Image ${imageCount}: ${width}x${height}px, ${bitsPerComponent} bits/component`);
+      if (objectMap && objectMap.forEach) {
+        objectMap.forEach((obj, ref) => {
+          try {
+            if (obj && typeof obj === 'object') {
+              // Check for image objects (XObject with Subtype Image)
+              if (obj.dict && obj.dict.get && obj.dict.get('Type')?.toString() === 'XObject' && 
+                  obj.dict.get('Subtype')?.toString() === 'Image') {
+                imageCount++;
+                const width = obj.dict.get('Width');
+                const height = obj.dict.get('Height');
+                const bitsPerComponent = obj.dict.get('BitsPerComponent') || 8;
+                if (width && height) {
+                  console.log(`     Image ${imageCount}: ${width}x${height}px, ${bitsPerComponent} bits/component`);
+                }
+              }
+              
+              // Check for font objects
+              if (obj.dict && obj.dict.get && obj.dict.get('Type')?.toString() === 'Font') {
+                fontCount++;
+                const fontName = obj.dict.get('BaseFont')?.toString() || 'Unknown';
+                const fontSubtype = obj.dict.get('Subtype')?.toString() || 'Unknown';
+                console.log(`     Font ${fontCount}: ${fontName} (${fontSubtype})`);
+              }
+              
+              // Count streams and their sizes
+              if (obj.contents && obj.contents.length) {
+                streamCount++;
+                totalStreamSize += obj.contents.length;
               }
             }
-            
-            // Check for font objects
-            if (obj.dict && obj.dict.get && obj.dict.get('Type')?.toString() === 'Font') {
-              fontCount++;
-              const fontName = obj.dict.get('BaseFont')?.toString() || 'Unknown';
-              const fontSubtype = obj.dict.get('Subtype')?.toString() || 'Unknown';
-              console.log(`     Font ${fontCount}: ${fontName} (${fontSubtype})`);
-            }
-            
-            // Count streams and their sizes
-            if (obj.contents && obj.contents.length) {
-              streamCount++;
-              totalStreamSize += obj.contents.length;
-            }
+          } catch (e) {
+            // Skip objects that can't be analyzed
           }
-        } catch (e) {
-          // Skip objects that can't be analyzed
-        }
-      });
+        });
+      } else {
+        console.log('   ⚠️ Cannot access PDF object map for detailed analysis');
+      }
       
       console.log(`   Images found: ${imageCount}`);
       console.log(`   Fonts found: ${fontCount}`);
