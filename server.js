@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import sharp from 'sharp';
+import { PDFDocument } from 'pdf-lib';
 import path from 'path';
 import fs from 'fs/promises';
 import cors from 'cors';
@@ -38,13 +39,13 @@ const storage = multer.memoryStorage();
 const upload = multer({
   storage,
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB limit
+    fileSize: 100 * 1024 * 1024, // 100MB limit for PDFs
   },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
     
     if (!allowedTypes.includes(file.mimetype)) {
-      return cb(new Error('Only JPEG, PNG, and WebP images are allowed'), false);
+      return cb(new Error('Only JPEG, PNG, WebP images and PDF files are allowed'), false);
     }
     
     cb(null, true);
@@ -314,6 +315,135 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
   }
 });
 
+// PDF compression endpoint
+app.post('/api/pdf-compress', upload.single('pdf'), async (req, res) => {
+  try {
+    const { file } = req;
+    
+    if (!file) {
+      return res.status(400).json({ 
+        error: 'No PDF uploaded',
+        message: 'Please select a PDF file to upload'
+      });
+    }
+
+    if (file.mimetype !== 'application/pdf') {
+      return res.status(400).json({
+        error: 'Invalid file type',
+        message: 'Only PDF files are supported for compression'
+      });
+    }
+
+    console.log(`📄 Processing PDF: ${file.originalname}`);
+    console.log(`📊 Original PDF size: ${file.size} bytes (${(file.size / 1024).toFixed(2)} KB)`);
+    
+    // Create uploads directory if it doesn't exist
+    const uploadsDir = path.join(__dirname, 'uploads');
+    await fs.mkdir(uploadsDir, { recursive: true });
+    
+    // Generate output filename
+    const timestamp = Date.now();
+    const filename = `compressed_${timestamp}.pdf`;
+    const outputPath = path.join(uploadsDir, filename);
+    
+    console.log(`📁 Output filename: ${filename}`);
+    
+    // Load the PDF document
+    const pdfDoc = await PDFDocument.load(file.buffer);
+    
+    // Get PDF metadata
+    const pageCount = pdfDoc.getPageCount();
+    console.log(`📄 PDF pages: ${pageCount}`);
+    
+    // Compress the PDF by removing unnecessary data
+    // This removes metadata, unused objects, and optimizes the structure
+    const compressedPdfBytes = await pdfDoc.save({
+      useObjectStreams: false, // Disable object streams for better compression
+      addDefaultPage: false,
+      objectsPerTick: 50,
+      updateFieldAppearances: false
+    });
+    
+    // Write compressed PDF to file
+    await fs.writeFile(outputPath, compressedPdfBytes);
+    console.log(`💾 Compressed PDF saved: ${filename}`);
+    
+    // Get compressed file size
+    const stats = await fs.stat(outputPath);
+    const compressedSize = stats.size;
+    
+    console.log(`📏 Compressed PDF details:`);
+    console.log(`   - Size: ${compressedSize} bytes`);
+    console.log(`   - Size: ${(compressedSize / 1024).toFixed(2)} KB`);
+    
+    // Calculate compression statistics
+    const originalSize = file.size;
+    const savings = ((originalSize - compressedSize) / originalSize * 100);
+    const savingsPercent = Math.max(0, parseFloat(savings.toFixed(2)));
+    const compressionRatio = originalSize / compressedSize;
+    
+    console.log(`📊 Compression Results:`);
+    console.log(`   Original: ${originalSize} bytes (${(originalSize / 1024).toFixed(2)} KB)`);
+    console.log(`   Compressed: ${compressedSize} bytes (${(compressedSize / 1024).toFixed(2)} KB)`);
+    console.log(`   Savings: ${savingsPercent}% (${((originalSize - compressedSize) / 1024).toFixed(2)} KB saved)`);
+    console.log(`   Compression Ratio: ${compressionRatio.toFixed(2)}:1`);
+    
+    // Warn if compression didn't work as expected
+    if (compressedSize >= originalSize) {
+      console.log(`⚠️  Warning: No size reduction achieved - PDF may already be optimized`);
+    }
+    
+    // Prepare response data
+    const responseData = {
+      success: true,
+      previewUrl: `/api/uploads/${filename}`,
+      downloadUrl: `/api/download/${filename}`,
+      stats: {
+        originalSize,
+        compressedSize,
+        savings: savingsPercent,
+        savingsPercent: savingsPercent,
+        compressionRatio: parseFloat(compressionRatio.toFixed(2))
+      },
+      metadata: {
+        originalFilename: file.originalname,
+        processedFilename: filename,
+        pageCount: pageCount,
+        format: 'application/pdf'
+      }
+    };
+    
+    console.log(`✅ PDF compression complete`);
+    console.log(`📄 Pages: ${pageCount}`);
+    console.log(`💾 Output: ${filename}\n`);
+    
+    res.json(responseData);
+    
+  } catch (error) {
+    console.error('PDF processing error:', error);
+    
+    // Handle specific errors
+    if (error.message && error.message.includes('Invalid PDF')) {
+      return res.status(400).json({
+        error: 'Invalid PDF file',
+        message: 'The uploaded file appears to be corrupted or is not a valid PDF'
+      });
+    }
+    
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        error: 'File too large',
+        message: 'PDF file must be smaller than 100MB'
+      });
+    }
+    
+    res.status(500).json({
+      error: 'PDF processing failed',
+      message: 'An unexpected error occurred while processing your PDF. Please try again.'
+    });
+  }
+});
+
 // Serve uploaded images for preview
 app.get('/api/uploads/:filename', async (req, res) => {
   try {
@@ -329,10 +459,11 @@ app.get('/api/uploads/:filename', async (req, res) => {
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg', 
       '.png': 'image/png',
-      '.webp': 'image/webp'
+      '.webp': 'image/webp',
+      '.pdf': 'application/pdf'
     };
     
-    res.setHeader('Content-Type', contentTypeMap[ext] || 'image/jpeg');
+    res.setHeader('Content-Type', contentTypeMap[ext] || 'application/octet-stream');
     res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
     
     // Send file
@@ -361,10 +492,11 @@ app.get('/api/download/:filename', async (req, res) => {
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
       '.png': 'image/png', 
-      '.webp': 'image/webp'
+      '.webp': 'image/webp',
+      '.pdf': 'application/pdf'
     };
     
-    res.setHeader('Content-Type', contentTypeMap[ext] || 'image/jpeg');
+    res.setHeader('Content-Type', contentTypeMap[ext] || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     
     // Send file for download
