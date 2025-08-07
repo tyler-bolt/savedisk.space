@@ -316,35 +316,9 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
 });
 
 // PDF compression endpoint
-app.post('/api/pdf-compress', (req, res) => {
-  upload.single('pdf')(req, res, async (err) => {
-    if (err) {
-      console.error('Multer error:', err);
-      
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({
-          error: 'File too large',
-          message: 'PDF file must be smaller than 50MB'
-        });
-      }
-      
-      if (err.message.includes('Only JPEG, PNG, WebP images and PDF files are allowed')) {
-        return res.status(400).json({
-          error: 'Invalid file type',
-          message: 'Only PDF files are supported'
-        });
-      }
-      
-      return res.status(400).json({
-        error: 'Upload error',
-        message: err.message || 'Failed to upload PDF file'
-      });
-    }
-  }
-  )
-
+app.post('/api/pdf-compress', upload.single('pdf'), async (req, res) => {
   try {
-    const { file } = req;
+    const file = req.file; // Access the uploaded file via req.file
     const level = req.query.level || 'medium';
     
     if (!file) {
@@ -353,7 +327,7 @@ app.post('/api/pdf-compress', (req, res) => {
         message: 'Please select a PDF file to upload'
       });
     }
-
+    // Multer's fileFilter should already handle this, but an extra check doesn't hurt
     if (file.mimetype !== 'application/pdf') {
       return res.status(400).json({
         error: 'Invalid file type',
@@ -492,15 +466,7 @@ app.post('/api/pdf-compress', (req, res) => {
     res.json(responseData);
     
   } catch (error) {
-    console.error('PDF processing error:', error);
-    
-    // Handle specific multer errors
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        error: 'File too large',
-        message: 'PDF file must be smaller than 50MB'
-      });
-    }
+    console.error('PDF processing error:', error); // Log the error for debugging
     
     res.status(500).json({
       error: 'PDF processing failed',
