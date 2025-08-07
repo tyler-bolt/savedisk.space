@@ -1,22 +1,14 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FileText, Upload, Compass as Compress, FileImage, FileSpreadsheet, Download, Zap, Info } from 'lucide-react';
+import { FileText, Upload, Compass as Compress, FileImage, FileSpreadsheet, Download, Zap } from 'lucide-react';
 import FileUpload from './FileUpload';
 import ProgressBar from './ProgressBar';
 
 interface PDFFile {
   name: string;
   size: number;
-  pageCount?: number;
+  pageCount: number;
   url: string;
-}
-
-interface ProcessedFile {
-  name: string;
-  size: number;
-  url: string;
-  pageCount?: number;
-  savings?: number;
 }
 
 type ProcessingType = 'compress' | 'word' | 'powerpoint' | 'jpeg' | null;
@@ -26,19 +18,19 @@ const PDFTools: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [processingType, setProcessingType] = useState<ProcessingType>(null);
-  const [processedFile, setProcessedFile] = useState<ProcessedFile | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [processedFile, setProcessedFile] = useState<{ name: string; size: number; url: string } | null>(null);
 
   const handleFileUpload = (file: File) => {
     const url = URL.createObjectURL(file);
+    // Simulate getting PDF info (in real app, this would be backend processing)
+    const estimatedPages = Math.floor(file.size / 50000); // Rough estimate
     
     setUploadedPDF({
       name: file.name,
       size: file.size,
+      pageCount: Math.max(1, estimatedPages),
       url: url
     });
-    setError(null);
-    setProcessedFile(null);
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -49,87 +41,14 @@ const PDFTools: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const processPDF = async (type: ProcessingType) => {
+  const processPDF = (type: ProcessingType) => {
     if (!uploadedPDF || !type) return;
 
-    setError(null);
     setIsProcessing(true);
     setProcessingType(type);
     setProgress(0);
 
-    try {
-      if (type === 'compress') {
-        // Real PDF compression using backend
-        await compressPDF();
-      } else {
-        // Simulate other processing types (not yet implemented)
-        await simulateProcessing(type);
-      }
-    } catch (error) {
-      console.error('Processing error:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred while processing your PDF');
-      setIsProcessing(false);
-      setProgress(0);
-    }
-  };
-
-  const compressPDF = async () => {
-    if (!uploadedPDF) return;
-
-    // Convert blob URL back to File object
-    const response = await fetch(uploadedPDF.url);
-    const blob = await response.blob();
-    const file = new File([blob], uploadedPDF.name, { type: 'application/pdf' });
-
-    const formData = new FormData();
-    formData.append('pdf', file);
-
-    // Simulate progress
-    const progressInterval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 90) {
-          clearInterval(progressInterval);
-          return 90;
-        }
-        return prev + 10;
-      });
-    }, 200);
-
-    try {
-      const response = await fetch('/api/pdf-compress', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'PDF compression failed');
-      }
-
-      const data = await response.json();
-      
-      setProcessedFile({
-        name: data.metadata.processedFilename,
-        size: data.stats.compressedSize,
-        url: data.downloadUrl,
-        pageCount: data.metadata.pageCount,
-        savings: data.stats.savingsPercent
-      });
-      
-      setProgress(100);
-      clearInterval(progressInterval);
-      setIsProcessing(false);
-      
-    } catch (error) {
-      clearInterval(progressInterval);
-      throw error;
-    }
-  };
-
-  const simulateProcessing = async (type: ProcessingType) => {
-    if (!uploadedPDF) return;
-
-    // Simulate processing progress for non-compression features
+    // Simulate processing progress
     const progressInterval = setInterval(() => {
       setProgress(prev => {
         if (prev >= 90) {
@@ -146,6 +65,10 @@ const PDFTools: React.FC = () => {
       let newSize = uploadedPDF.size;
 
       switch (type) {
+        case 'compress':
+          newName = uploadedPDF.name.replace('.pdf', '_compressed.pdf');
+          newSize = Math.floor(uploadedPDF.size * 0.4); // 60% compression
+          break;
         case 'word':
           newName = uploadedPDF.name.replace('.pdf', '.docx');
           newSize = Math.floor(uploadedPDF.size * 0.8);
@@ -173,18 +96,13 @@ const PDFTools: React.FC = () => {
   const downloadProcessed = () => {
     if (!processedFile) return;
     
-    if (processingType === 'compress') {
-      // For real compression, use the backend download URL
-      window.open(processedFile.url, '_blank');
-    } else {
-      // For simulated processing, use blob download
-      const link = document.createElement('a');
-      link.href = processedFile.url;
-      link.download = processedFile.name;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+    // In a real app, this would download the actual processed file
+    const link = document.createElement('a');
+    link.href = processedFile.url;
+    link.download = processedFile.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const toolButtons = [
@@ -268,12 +186,8 @@ const PDFTools: React.FC = () => {
                     <h3 className="font-dm-sans font-semibold text-white truncate">{uploadedPDF.name}</h3>
                     <div className="text-sm text-gray-300 mt-1">
                       <span>Size: {formatFileSize(uploadedPDF.size)}</span>
-                      {uploadedPDF.pageCount && (
-                        <>
-                          <span className="mx-2">•</span>
-                          <span>Pages: {uploadedPDF.pageCount}</span>
-                        </>
-                      )}
+                      <span className="mx-2">•</span>
+                      <span>Pages: ~{uploadedPDF.pageCount}</span>
                     </div>
                   </div>
                   <button
@@ -325,27 +239,6 @@ const PDFTools: React.FC = () => {
           </motion.div>
         )}
 
-        {/* Error Display */}
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="backdrop-blur-md bg-gradient-to-br from-red-500/10 to-pink-600/10 border border-red-500/20 rounded-2xl p-6 mb-8"
-          >
-            <h3 className="text-xl font-bold font-space-grotesk text-white mb-2 flex items-center">
-              <Info className="h-5 w-5 mr-2 text-red-400" />
-              Processing Error
-            </h3>
-            <p className="text-red-300 font-dm-sans">{error}</p>
-            <button
-              onClick={() => setError(null)}
-              className="mt-4 bg-red-500/20 hover:bg-red-500/30 text-red-300 font-dm-sans font-medium py-2 px-4 rounded-lg transition-all duration-300"
-            >
-              Dismiss
-            </button>
-          </motion.div>
-        )}
-
         {/* Processing Status */}
         {isProcessing && (
           <motion.div
@@ -382,12 +275,7 @@ const PDFTools: React.FC = () => {
             <div className="bg-black/20 rounded-xl p-4 mb-6">
               <div className="flex items-center justify-between mb-4">
                 <span className="font-dm-sans text-gray-300">File Ready</span>
-                <div className="flex items-center space-x-2">
-                  {processedFile.savings !== undefined && (
-                    <span className="text-green-400 font-bold">{processedFile.savings.toFixed(1)}% saved</span>
-                  )}
-                  <span className="text-green-400 font-bold">✓ Done</span>
-                </div>
+                <span className="text-green-400 font-bold">✓ Done</span>
               </div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
@@ -396,17 +284,10 @@ const PDFTools: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-gray-400">Processed</p>
-                  <p className={`font-medium ${processedFile.savings !== undefined && processedFile.savings > 0 ? 'text-green-400' : 'text-white'}`}>
-                    {formatFileSize(processedFile.size)}
-                  </p>
+                  <p className="text-green-400 font-medium">{formatFileSize(processedFile.size)}</p>
                 </div>
               </div>
-              <div className="mt-3 text-sm">
-                <p className="text-gray-300">Output: {processedFile.name}</p>
-                {processedFile.pageCount && (
-                  <p className="text-gray-400">Pages: {processedFile.pageCount}</p>
-                )}
-              </div>
+              <p className="text-gray-300 text-sm mt-2">Output: {processedFile.name}</p>
             </div>
 
             <motion.button
