@@ -53,7 +53,7 @@ const PDFUploadSection: React.FC<PDFUploadSectionProps> = ({
                 <div className="text-sm text-gray-300 mt-1">
                   <span>Size: {formatFileSize(uploadedPDF.size)}</span>
                   <span className="mx-2">•</span>
-                  <span>Pages: ~{uploadedPDF.pageCount}</span>
+                  <span>Pages: {uploadedPDF.pageCount}</span>
                 </div>
               </div>
               <button
