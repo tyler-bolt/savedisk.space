@@ -109,7 +109,8 @@ const PDFTools: React.FC = () => {
         useObjectStreams: true,
         addDefaultPage: false,
         objectsPerTick: 50,
-        updateFieldAppearances: false
+        updateFieldAppearances: false,
+        compress: true
       });
       
       // Create a blob from the compressed bytes
