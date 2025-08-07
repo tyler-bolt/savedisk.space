@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FileText, Upload, Compass as Compress, FileImage, FileSpreadsheet, Download, Zap } from 'lucide-react';
-import FileUpload from './FileUpload';
+import { FileText, Upload, Compass as Compress, FileImage, FileSpreadsheet, Download, Zap, AlertCircle } from 'lucide-react'import FileUpload from './FileUpload';
 import ProgressBar from './ProgressBar';
 
 interface PDFFile {
