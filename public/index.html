@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Compression Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .upload-section {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        input[type="file"], select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        #stats {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            white-space: pre-line;
+            font-family: monospace;
+            border-left: 4px solid #007bff;
+            display: none;
+        }
+        
+        #preview {
+            max-width: 100%;
+            height: auto;
+            margin-top: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: none;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #dc3545;
+            display: none;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #007bff;
+            font-style: italic;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Image Compression Test</h1>
+        
+        <div class="upload-section">
+            <label for="imageUpload">Select Image:</label>
+            <input type="file" id="imageUpload" accept="image/jpeg,image/jpg,image/png,image/webp" />
+            
+            <label for="compressionLevel">Compression Level:</label>
+            <select id="compressionLevel">
+                <option value="low">Low (90% quality - Best quality)</option>
+                <option value="medium" selected>Medium (70% quality - Balanced)</option>
+                <option value="high">High (50% quality - Smallest size)</option>
+            </select>
+            
+            <button onclick="uploadImage()">Upload & Compress</button>
+        </div>
+        
+        <div class="loading" id="loading">Processing your image...</div>
+        <div class="error" id="error"></div>
+        <div id="stats"></div>
+        <img id="preview" alt="Compressed preview" />
+    </div>
+
+    <script>
+        async function uploadImage() {
+            const fileInput = document.getElementById('imageUpload');
+            const level = document.getElementById('compressionLevel').value;
+            const statsDiv = document.getElementById('stats');
+            const previewImg = document.getElementById('preview');
+            const errorDiv = document.getElementById('error');
+            const loadingDiv = document.getElementById('loading');
+            const uploadButton = document.querySelector('button');
+            
+            // Reset UI
+            statsDiv.style.display = 'none';
+            previewImg.style.display = 'none';
+            errorDiv.style.display = 'none';
+            loadingDiv.style.display = 'none';
+            
+            // Validate file selection
+            if (!fileInput.files || !fileInput.files[0]) {
+                showError('Please select an image file');
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            
+            // Validate file type
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+            if (!allowedTypes.includes(file.type)) {
+                showError('Please select a valid image file (JPEG, PNG, or WebP)');
+                return;
+            }
+            
+            // Show loading state
+            loadingDiv.style.display = 'block';
+            uploadButton.disabled = true;
+            uploadButton.textContent = 'Processing...';
+            
+            try {
+                const formData = new FormData();
+                formData.append('image', file);
+                
+                const response = await fetch(`/api/upload?level=${level}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Upload failed');
+                }
+                
+                const data = await response.json();
+                
+                // Display preview image
+                previewImg.src = data.previewUrl;
+                previewImg.style.display = 'block';
+                
+                // Format and display stats
+                const originalKB = (data.stats.originalSize / 1024).toFixed(2);
+                const compressedKB = (data.stats.compressedSize / 1024).toFixed(2);
+                const savings = data.stats.savingsPercent;
+                
+                statsDiv.innerHTML = `
+<strong>Compression Results:</strong>
+Original Size: ${originalKB} KB
+Compressed Size: ${compressedKB} KB
+Space Saved: ${savings}% (${(originalKB - compressedKB).toFixed(2)} KB)
+Compression Ratio: ${data.stats.compressionRatio}:1
+Compression Level: ${data.stats.compressionLevel} (${data.stats.compressionDescription})
+Original Format: ${data.metadata.originalFormat}
+Output Format: ${data.metadata.outputFormat}
+Original Dimensions: ${data.metadata.originalDimensions.width} × ${data.metadata.originalDimensions.height}px
+
+<strong>Debug Info:</strong>
+Sharp Version: ${data.debug.sharpVersion}
+LibVips Version: ${data.debug.libvipsVersion}
+Actual Original Size: ${data.debug.actualOriginalSize} bytes
+Actual Compressed Size: ${data.debug.actualCompressedSize} bytes
+Format: ${data.debug.compressionSettings.format.toUpperCase()}
+Quality Setting: ${data.debug.compressionSettings.quality}
+MozJPEG Enabled: ${data.debug.compressionSettings.mozjpegEnabled}
+PNG Compression Level: ${data.debug.compressionSettings.pngCompressionLevel}`;
+                
+                statsDiv.style.display = 'block';
+                
+                // Log compression verification to console
+                console.log('🔍 Compression Verification:');
+                console.log('Original size:', data.debug.actualOriginalSize, 'bytes');
+                console.log('Compressed size:', data.debug.actualCompressedSize, 'bytes');
+                console.log('Savings:', savings + '%');
+                console.log('Preview URL:', data.previewUrl);
+                console.log('Sharp version:', data.debug.sharpVersion);
+                console.log('Format settings:', data.debug.compressionSettings);
+                
+            } catch (error) {
+                console.error('Upload error:', error);
+                showError(error.message || 'An error occurred while processing your image');
+            } finally {
+                // Reset loading state
+                loadingDiv.style.display = 'none';
+                uploadButton.disabled = false;
+                uploadButton.textContent = 'Upload & Compress';
+            }
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        // Handle file input change to reset UI
+        document.getElementById('imageUpload').addEventListener('change', function() {
+            document.getElementById('stats').style.display = 'none';
+            document.getElementById('preview').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+        });
+    </script>
+</body>
+</html>
