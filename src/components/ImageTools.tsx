@@ -10,7 +10,6 @@ interface FileInfo {
   format: string;
   dimensions?: { width: number; height: number };
   url: string;
-  file: File;
 }
 
 const ImageTools: React.FC = () => {
@@ -32,8 +31,7 @@ const ImageTools: React.FC = () => {
         size: file.size,
         format: file.type,
         dimensions: { width: img.width, height: img.height },
-        url: url,
-        file: file
+        url: url
       });
     };
     img.src = url;
@@ -53,7 +51,7 @@ const ImageTools: React.FC = () => {
     setIsProcessing(true);
     setProgress(0);
 
-    // Progress animation
+    // Simulate compression progress
     const progressInterval = setInterval(() => {
       setProgress(prev => {
         if (prev >= 90) {
@@ -62,64 +60,32 @@ const ImageTools: React.FC = () => {
         }
         return prev + 10;
       });
-    }, 300);
+    }, 200);
 
-    try {
-      // Create FormData for the API request
-      const formData = new FormData();
-      formData.append('image', uploadedFile.file);
-      
-      // Determine API URL (use environment variable or fallback to localhost)
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-      
-      // Make API request to backend
-      const response = await fetch(`${apiUrl}/api/upload?level=${compressionLevel}`, {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Compression failed');
-      }
-      
-      const data = await response.json();
-      
-      // Update state with real compression results
+    // Simulate compression (in real app, this would be backend processing)
+    setTimeout(() => {
+      const compressionRates = { low: 0.85, medium: 0.65, high: 0.45 };
+      const rate = compressionRates[compressionLevel];
+      const newSize = Math.floor(uploadedFile.size * rate);
+      const savings = Math.floor((1 - rate) * 100);
+
       setCompressedFile({
-        name: data.metadata.processedFilename,
-        size: data.stats.compressedSize,
-        format: data.metadata.outputFormat,
-        dimensions: uploadedFile.dimensions,
-        url: `${apiUrl}${data.previewUrl}`,
-        file: uploadedFile.file // Keep reference to original file
+        ...uploadedFile,
+        size: newSize,
+        name: uploadedFile.name.replace(/\.[^/.]+$/, '_compressed.webp')
       });
-      
-      setCompressionSavings(data.stats.savingsPercent);
-      clearInterval(progressInterval);
+      setCompressionSavings(savings);
       setProgress(100);
       setIsProcessing(false);
-      
-    } catch (error) {
-      console.error('Compression error:', error);
-      clearInterval(progressInterval);
-      setIsProcessing(false);
-      
-      // You could add error state handling here
-      alert(`Compression failed: ${error.message}`);
-    }
+    }, 2000);
   };
-
 
   const downloadCompressed = () => {
     if (!compressedFile) return;
     
-    // Download the actual compressed file from backend
+    // In a real app, this would download the actual compressed file
     const link = document.createElement('a');
-    
-    // Use download URL instead of preview URL
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-    link.href = compressedFile.url.replace('/api/uploads/', '/api/download/');
+    link.href = compressedFile.url;
     link.download = compressedFile.name;
     document.body.appendChild(link);
     link.click();
