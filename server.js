@@ -316,7 +316,31 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
 });
 
 // PDF compression endpoint
-app.post('/api/pdf-compress', upload.single('pdf'), async (req, res) => {
+app.post('/api/pdf-compress', (req, res) => {
+  upload.single('pdf')(req, res, async (err) => {
+    if (err) {
+      console.error('Multer error:', err);
+      
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          error: 'File too large',
+          message: 'PDF file must be smaller than 50MB'
+        });
+      }
+      
+      if (err.message.includes('Only JPEG, PNG, WebP images and PDF files are allowed')) {
+        return res.status(400).json({
+          error: 'Invalid file type',
+          message: 'Only PDF files are supported'
+        });
+      }
+      
+      return res.status(400).json({
+        error: 'Upload error',
+        message: err.message || 'Failed to upload PDF file'
+      });
+    }
+
   try {
     const { file } = req;
     const level = req.query.level || 'medium';
@@ -481,6 +505,7 @@ app.post('/api/pdf-compress', upload.single('pdf'), async (req, res) => {
       message: 'An unexpected error occurred while processing your PDF. Please try again.'
     });
   }
+  });
 });
 
 // Serve uploaded images for preview
