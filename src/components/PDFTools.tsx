@@ -97,14 +97,69 @@ const PDFTools: React.FC = () => {
       });
     }, 300);
 
+    console.log('🔧 PDF Compression Debug Log');
+    console.log('================================');
+    console.log(`📁 Original file: ${uploadedPDF.name}`);
+    console.log(`📏 Original size: ${uploadedPDF.file.size} bytes (${(uploadedPDF.file.size / 1024).toFixed(2)} KB)`);
+    console.log(`📄 Estimated pages: ${uploadedPDF.pageCount}`);
+    console.log(`🕐 Starting compression at: ${new Date().toISOString()}`);
+
     try {
       // Read the file as ArrayBuffer
+      console.log('📖 Reading file as ArrayBuffer...');
       const arrayBuffer = await uploadedPDF.file.arrayBuffer();
+      console.log(`✅ ArrayBuffer created: ${arrayBuffer.byteLength} bytes`);
       
       // Load the PDF document
+      console.log('📋 Loading PDF document with pdf-lib...');
       const pdfDoc = await PDFDocument.load(arrayBuffer);
       
+      // Get detailed PDF information
+      const pageCount = pdfDoc.getPageCount();
+      const title = pdfDoc.getTitle();
+      const author = pdfDoc.getAuthor();
+      const creator = pdfDoc.getCreator();
+      const producer = pdfDoc.getProducer();
+      
+      console.log('📊 PDF Document Analysis:');
+      console.log(`   Pages: ${pageCount}`);
+      console.log(`   Title: ${title || 'Not set'}`);
+      console.log(`   Author: ${author || 'Not set'}`);
+      console.log(`   Creator: ${creator || 'Not set'}`);
+      console.log(`   Producer: ${producer || 'Not set'}`);
+      
+      // Analyze PDF structure
+      console.log('🔍 Analyzing PDF structure...');
+      const pages = pdfDoc.getPages();
+      let totalTextContent = 0;
+      let totalImages = 0;
+      
+      pages.forEach((page, index) => {
+        const { width, height } = page.getSize();
+        console.log(`   Page ${index + 1}: ${width.toFixed(1)} x ${height.toFixed(1)} pts`);
+        
+        // Try to get some basic content info (this is limited with pdf-lib)
+        try {
+          const pageNode = page.node;
+          if (pageNode && pageNode.Contents) {
+            console.log(`   Page ${index + 1}: Has content streams`);
+          }
+        } catch (e) {
+          // pdf-lib doesn't expose detailed content analysis easily
+        }
+      });
+      
+      console.log('⚙️ Applying compression settings:');
+      console.log('   useObjectStreams: true (groups PDF objects for better compression)');
+      console.log('   addDefaultPage: false (prevents adding unnecessary blank pages)');
+      console.log('   subset: true (creates font subsets with only used characters)');
+      console.log('   objectsPerTick: 50 (processing batch size)');
+      console.log('   updateFieldAppearances: false (skips form field re-rendering)');
+      console.log('   compress: true (applies stream compression)');
+      
       // Save with compression options
+      console.log('💾 Saving compressed PDF...');
+      const startTime = performance.now();
       const compressedPdfBytes = await pdfDoc.save({
         useObjectStreams: true,
         addDefaultPage: false,
@@ -113,10 +168,47 @@ const PDFTools: React.FC = () => {
         updateFieldAppearances: false,
         compress: true
       });
+      const endTime = performance.now();
+      
+      console.log(`✅ Compression completed in ${(endTime - startTime).toFixed(2)}ms`);
+      console.log(`📏 Compressed size: ${compressedPdfBytes.length} bytes (${(compressedPdfBytes.length / 1024).toFixed(2)} KB)`);
+      
+      // Calculate compression statistics
+      const originalSize = uploadedPDF.file.size;
+      const compressedSize = compressedPdfBytes.length;
+      const savedBytes = originalSize - compressedSize;
+      const compressionRatio = originalSize / compressedSize;
+      const compressionPercent = (savedBytes / originalSize) * 100;
+      
+      console.log('📊 Compression Results:');
+      console.log(`   Original: ${originalSize} bytes (${(originalSize / 1024).toFixed(2)} KB)`);
+      console.log(`   Compressed: ${compressedSize} bytes (${(compressedSize / 1024).toFixed(2)} KB)`);
+      console.log(`   Saved: ${savedBytes} bytes (${(savedBytes / 1024).toFixed(2)} KB)`);
+      console.log(`   Compression ratio: ${compressionRatio.toFixed(2)}:1`);
+      console.log(`   Compression percentage: ${compressionPercent.toFixed(2)}%`);
+      
+      if (savedBytes <= 0) {
+        console.log('⚠️ WARNING: No compression achieved or file size increased!');
+        console.log('   Possible reasons:');
+        console.log('   - PDF was already highly optimized');
+        console.log('   - PDF contains mostly compressed images');
+        console.log('   - PDF structure overhead from pdf-lib processing');
+      } else if (compressionPercent < 5) {
+        console.log('ℹ️ INFO: Minimal compression achieved (<5%)');
+        console.log('   This is normal for:');
+        console.log('   - Already optimized PDFs');
+        console.log('   - PDFs with mostly image content');
+        console.log('   - Small PDFs with little redundant data');
+      } else {
+        console.log('🎉 Good compression achieved!');
+      }
       
       // Create a blob from the compressed bytes
       const compressedBlob = new Blob([compressedPdfBytes], { type: 'application/pdf' });
       const compressedUrl = URL.createObjectURL(compressedBlob);
+      
+      console.log('🔗 Created download URL for compressed PDF');
+      console.log('================================');
       
       setProcessedFile({
         name: uploadedPDF.name.replace('.pdf', '_compressed.pdf'),
@@ -129,6 +221,13 @@ const PDFTools: React.FC = () => {
       setIsProcessing(false);
     } catch (error) {
       console.error('PDF compression error:', error);
+      console.log('🔍 Error details:');
+      console.log(`   Error type: ${error.constructor.name}`);
+      console.log(`   Error message: ${error.message}`);
+      if (error.stack) {
+        console.log(`   Stack trace: ${error.stack}`);
+      }
+      console.log('================================');
       clearInterval(progressInterval);
       setIsProcessing(false);
       // You could add error state handling here if needed
